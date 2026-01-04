@@ -1,0 +1,1232 @@
+openapi: 3.0.3
+info:
+  title: Paxeer Bridge API
+  description: |
+    Comprehensive API for the Paxeer multichain bridge platform.
+    
+    Features:
+    - Bridge assets across 26+ blockchain networks
+    - Rewards and points system with tier-based multipliers
+    - Referral program with bonuses
+    - Off-chain staking with flexible lock periods
+    - Real-time transaction tracking via WebSocket
+    - Gas price optimization recommendations
+    
+    Authentication: Not required for read operations. Write operations require valid wallet signature.
+  version: 1.0.0
+  contact:
+    name: Paxeer Support
+    url: https://paxeer.app
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://sidiora.exchange/api/bridge/
+    description: Local development server
+  - url: https://sidiora.exchange/api/bridge/
+    description: Production server
+
+tags:
+  - name: Bridge
+    description: Bridge transaction operations
+  - name: Rewards
+    description: Points, tiers, and rewards management
+  - name: Referrals
+    description: Referral code and analytics
+  - name: Staking
+    description: Off-chain staking operations
+  - name: Health
+    description: System health and monitoring
+
+paths:
+  # ============================================================
+  # BRIDGE ENDPOINTS
+  # ============================================================
+  
+  /bridge/initiate:
+    post:
+      tags:
+        - Bridge
+      summary: Initiate bridge transaction
+      description: |
+        Create a new bridge transaction to transfer assets between networks.
+        Returns deposit address and transaction details.
+      operationId: initiateBridge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BridgeInitiateRequest'
+            example:
+              userAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+              fromNetwork: "ethereum"
+              toNetwork: "base"
+              tokenSymbol: "USDC"
+              amount: "100"
+      responses:
+        '200':
+          description: Bridge transaction initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BridgeInitiateResponse'
+              example:
+                success: true
+                data:
+                  bridgeId: "550e8400-e29b-41d4-a716-446655440000"
+                  status: "pending"
+                  transactionData:
+                    to: "0x837212d006198a30ff5f18574b0c7fb79dbbfa64"
+                    value: "100000000"
+                    data: "0x..."
+                  fromNetwork: "ethereum"
+                  toNetwork: "base"
+                  fromToken: "USDC"
+                  toToken: "USDC"
+                  fromAmount: "100"
+                  toAmount: "99.9"
+                  fee: "0.1"
+                  feeUsd: "0.10"
+                  estimatedReward: "5"
+                  earlyBirdBonus: "2.5"
+                  expiresAt: 1703174400000
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /bridge/confirm:
+    post:
+      tags:
+        - Bridge
+      summary: Confirm deposit transaction
+      description: |
+        Confirm that user has sent the deposit transaction.
+        System will monitor the blockchain for confirmation.
+      operationId: confirmDeposit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BridgeConfirmRequest'
+            example:
+              bridgeId: "550e8400-e29b-41d4-a716-446655440000"
+              txHash: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+      responses:
+        '200':
+          description: Deposit confirmed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BridgeConfirmResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /bridge/status/{bridgeId}:
+    get:
+      tags:
+        - Bridge
+      summary: Get bridge transaction status
+      description: Retrieve detailed status of a bridge transaction including logs and timestamps
+      operationId: getBridgeStatus
+      parameters:
+        - name: bridgeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Unique bridge transaction identifier
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Transaction status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BridgeStatusResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /bridge/user/{userAddress}:
+    get:
+      tags:
+        - Bridge
+      summary: Get user's bridge transactions
+      description: Retrieve all bridge transactions for a specific user address
+      operationId: getUserTransactions
+      parameters:
+        - name: userAddress
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^0x[a-fA-F0-9]{40}$'
+          description: Ethereum wallet address
+          example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          description: Maximum number of transactions to return
+      responses:
+        '200':
+          description: User transactions retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTransactionsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /bridge/stats:
+    get:
+      tags:
+        - Bridge
+      summary: Get bridge statistics
+      description: Retrieve global bridge statistics across all networks
+      operationId: getBridgeStats
+      responses:
+        '200':
+          description: Statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BridgeStatsResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /bridge/health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Check if the bridge API is operational
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  # ============================================================
+  # REWARDS ENDPOINTS
+  # ============================================================
+
+  /rewards/dashboard/{address}:
+    get:
+      tags:
+        - Rewards
+      summary: Get user rewards dashboard
+      description: |
+        Retrieve comprehensive rewards information for a user including:
+        - Total points and current tier
+        - Pending and distributed rewards
+        - Bridge volume and transaction count
+        - Tier progress and next tier requirements
+      operationId: getUserDashboard
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^0x[a-fA-F0-9]{40}$'
+          description: User wallet address
+          example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+      responses:
+        '200':
+          description: Dashboard data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /rewards/leaderboard:
+    get:
+      tags:
+        - Rewards
+      summary: Get leaderboard
+      description: Retrieve top users by volume or points
+      operationId: getLeaderboard
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [volume, points]
+            default: volume
+          description: Leaderboard type
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+          description: Number of users to return
+      responses:
+        '200':
+          description: Leaderboard retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaderboardResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /rewards/config:
+    get:
+      tags:
+        - Rewards
+      summary: Get rewards configuration
+      description: Retrieve current rewards system configuration including rates, tiers, and bonuses
+      operationId: getRewardsConfig
+      responses:
+        '200':
+          description: Configuration retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardsConfigResponse'
+
+  # ============================================================
+  # REFERRAL ENDPOINTS
+  # ============================================================
+
+  /rewards/referral/{address}:
+    get:
+      tags:
+        - Referrals
+      summary: Get referral statistics
+      description: Retrieve user's referral code, stats, and earnings
+      operationId: getReferralStats
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^0x[a-fA-F0-9]{40}$'
+          description: User wallet address
+      responses:
+        '200':
+          description: Referral stats retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferralStatsResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /rewards/referral/apply:
+    post:
+      tags:
+        - Referrals
+      summary: Apply referral code
+      description: Apply a referral code to link new user with referrer
+      operationId: applyReferralCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyReferralRequest'
+            example:
+              userAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+              referralCode: "PAXEER123"
+      responses:
+        '200':
+          description: Referral code applied successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyReferralResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /rewards/referral/leaderboard:
+    get:
+      tags:
+        - Referrals
+      summary: Get top referrers
+      description: Retrieve leaderboard of users with most referrals
+      operationId: getReferralLeaderboard
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          description: Number of referrers to return
+      responses:
+        '200':
+          description: Referral leaderboard retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferralLeaderboardResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ============================================================
+  # STAKING ENDPOINTS
+  # ============================================================
+
+  /rewards/staking/pools:
+    get:
+      tags:
+        - Staking
+      summary: Get staking pools
+      description: Retrieve available staking pools with APY and lock period options
+      operationId: getStakingPools
+      parameters:
+        - name: userAddress
+          in: query
+          schema:
+            type: string
+            pattern: '^0x[a-fA-F0-9]{40}$'
+          description: Optional user address for personalized APY calculation
+      responses:
+        '200':
+          description: Staking pools retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StakingPoolsResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /rewards/staking/{address}:
+    get:
+      tags:
+        - Staking
+      summary: Get user staking positions
+      description: Retrieve all staking positions for a user with rewards
+      operationId: getUserStaking
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^0x[a-fA-F0-9]{40}$'
+          description: User wallet address
+      responses:
+        '200':
+          description: Staking positions retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStakingResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /rewards/staking/stake:
+    post:
+      tags:
+        - Staking
+      summary: Create staking position
+      description: Stake tokens with optional lock period for higher APY
+      operationId: createStake
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StakeRequest'
+            example:
+              userAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+              tokenSymbol: "PXR"
+              amount: "1000"
+              lockPeriodDays: 90
+      responses:
+        '200':
+          description: Staking position created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StakeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /rewards/staking/unstake:
+    post:
+      tags:
+        - Staking
+      summary: Unstake position
+      description: |
+        Unstake tokens from a position. 
+        Early unstaking (before lock period ends) incurs penalties:
+        - 10% penalty on principal
+        - 50% penalty on accrued rewards
+      operationId: unstake
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnstakeRequest'
+            example:
+              userAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+              positionId: 123
+      responses:
+        '200':
+          description: Unstaking successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnstakeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+# ============================================================
+# COMPONENTS
+# ============================================================
+
+components:
+  schemas:
+    # Request Schemas
+    BridgeInitiateRequest:
+      type: object
+      required:
+        - userAddress
+        - fromNetwork
+        - toNetwork
+        - tokenSymbol
+        - amount
+      properties:
+        userAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+          description: User's wallet address
+          example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+        fromNetwork:
+          type: string
+          description: Source blockchain network
+          example: "ethereum"
+          enum: [ethereum, base, bsc, arbitrum, optimism, polygon, avalanche, fantom, celo, paxeer, hyperliquid, flow, tron, bitcoin, abstract, berachain, mantle, zksync, starknet, unichain, worldchain, hyperevm, monad, sei, solana]
+        toNetwork:
+          type: string
+          description: Destination blockchain network
+          example: "base"
+        tokenSymbol:
+          type: string
+          description: Token symbol to bridge
+          example: "USDC"
+        amount:
+          type: string
+          description: Amount to bridge (in token units)
+          example: "100"
+
+    BridgeConfirmRequest:
+      type: object
+      required:
+        - bridgeId
+        - txHash
+      properties:
+        bridgeId:
+          type: string
+          format: uuid
+          description: Bridge transaction ID from initiate response
+        txHash:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{64}$'
+          description: Transaction hash from user's deposit
+
+    ApplyReferralRequest:
+      type: object
+      required:
+        - userAddress
+        - referralCode
+      properties:
+        userAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+          description: New user's wallet address
+        referralCode:
+          type: string
+          description: Referrer's code (6 uppercase letters/numbers)
+          example: "PAXEER123"
+
+    StakeRequest:
+      type: object
+      required:
+        - userAddress
+        - tokenSymbol
+        - amount
+      properties:
+        userAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        tokenSymbol:
+          type: string
+          description: Token to stake
+          example: "PXR"
+        amount:
+          type: string
+          description: Amount to stake
+          example: "1000"
+        lockPeriodDays:
+          type: integer
+          description: Lock period in days (0 for flexible, or 30/90/180/365)
+          enum: [0, 30, 90, 180, 365]
+          default: 0
+
+    UnstakeRequest:
+      type: object
+      required:
+        - userAddress
+        - positionId
+      properties:
+        userAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        positionId:
+          type: integer
+          description: Staking position ID to unstake
+
+    # Response Schemas
+    BridgeInitiateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            bridgeId:
+              type: string
+              format: uuid
+            status:
+              type: string
+              enum: [pending, deposited, confirmed, sending, completed, failed, expired]
+            transactionData:
+              type: object
+              properties:
+                to:
+                  type: string
+                  description: Deposit address
+                value:
+                  type: string
+                  description: Amount to send (in wei for EVM)
+                data:
+                  type: string
+                  description: Transaction data (if needed)
+            fromNetwork:
+              type: string
+            toNetwork:
+              type: string
+            fromToken:
+              type: string
+            toToken:
+              type: string
+            fromAmount:
+              type: string
+            toAmount:
+              type: string
+              description: Amount user will receive after fees
+            fee:
+              type: string
+              description: Bridge fee amount
+            feeUsd:
+              type: string
+              description: Bridge fee in USD
+            estimatedReward:
+              type: string
+              description: Estimated PXR reward
+            earlyBirdBonus:
+              type: string
+              description: Additional early bird bonus (if applicable)
+            expiresAt:
+              type: integer
+              format: int64
+              description: Timestamp when transaction expires
+
+    BridgeConfirmResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            bridgeId:
+              type: string
+              format: uuid
+            status:
+              type: string
+            message:
+              type: string
+
+    BridgeStatusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            userAddress:
+              type: string
+            fromNetwork:
+              type: string
+            toNetwork:
+              type: string
+            tokenSymbol:
+              type: string
+            amount:
+              type: string
+            status:
+              type: string
+              enum: [pending, deposited, confirmed, sending, completed, failed, expired]
+            depositTxHash:
+              type: string
+              nullable: true
+            sendTxHash:
+              type: string
+              nullable: true
+            confirmations:
+              type: integer
+            requiredConfirmations:
+              type: integer
+            createdAt:
+              type: integer
+              format: int64
+            updatedAt:
+              type: integer
+              format: int64
+            expiresAt:
+              type: integer
+              format: int64
+            logs:
+              type: array
+              items:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+                  timestamp:
+                    type: integer
+                    format: int64
+
+    UserTransactionsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            transactions:
+              type: array
+              items:
+                $ref: '#/components/schemas/BridgeTransaction'
+            total:
+              type: integer
+
+    BridgeTransaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userAddress:
+          type: string
+        fromNetwork:
+          type: string
+        toNetwork:
+          type: string
+        tokenSymbol:
+          type: string
+        amount:
+          type: string
+        status:
+          type: string
+        depositTxHash:
+          type: string
+          nullable: true
+        sendTxHash:
+          type: string
+          nullable: true
+        createdAt:
+          type: integer
+          format: int64
+        completedAt:
+          type: integer
+          format: int64
+          nullable: true
+
+    BridgeStatsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            stats:
+              type: array
+              items:
+                type: object
+                properties:
+                  network:
+                    type: string
+                  totalVolume:
+                    type: string
+                  totalVolumeUsd:
+                    type: string
+                  transactionCount:
+                    type: integer
+                  lastUpdated:
+                    type: integer
+                    format: int64
+            timestamp:
+              type: integer
+              format: int64
+
+    HealthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+          enum: [operational, degraded, down]
+        timestamp:
+          type: integer
+          format: int64
+
+    DashboardResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            user:
+              type: object
+              properties:
+                address:
+                  type: string
+                totalPoints:
+                  type: number
+                tier:
+                  type: string
+                  enum: [bronze, silver, gold, platinum, diamond]
+                referralCode:
+                  type: string
+                totalBridgeVolume:
+                  type: string
+                totalBridgeCount:
+                  type: integer
+                referredBy:
+                  type: string
+                  nullable: true
+            rewards:
+              type: object
+              properties:
+                pending:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Reward'
+                distributed:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Reward'
+                totalPending:
+                  type: string
+                totalDistributed:
+                  type: string
+            tierProgress:
+              type: object
+              properties:
+                currentTier:
+                  type: string
+                nextTier:
+                  type: string
+                  nullable: true
+                volumeRequired:
+                  type: string
+                  nullable: true
+                volumeProgress:
+                  type: string
+
+    Reward:
+      type: object
+      properties:
+        id:
+          type: integer
+        userAddress:
+          type: string
+        rewardType:
+          type: string
+          enum: [bridge, referral, staking]
+        tokenSymbol:
+          type: string
+        amount:
+          type: string
+        usdValue:
+          type: string
+        status:
+          type: string
+          enum: [pending, queued, distributed]
+        createdAt:
+          type: integer
+          format: int64
+        distributedAt:
+          type: integer
+          format: int64
+          nullable: true
+
+    LeaderboardResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              rank:
+                type: integer
+              address:
+                type: string
+              totalBridgeVolume:
+                type: string
+              totalPoints:
+                type: number
+              tier:
+                type: string
+
+    RewardsConfigResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            pointsPerUsd:
+              type: number
+              description: Points earned per USD bridged
+            bridgeRewardRate:
+              type: number
+              description: PXR tokens rewarded per USD bridged
+            isEarlyBird:
+              type: boolean
+            earlyBirdMultiplier:
+              type: number
+            earlyBirdEndsAt:
+              type: integer
+              format: int64
+            tiers:
+              type: object
+              additionalProperties:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  minVolume:
+                    type: number
+                  pointsMultiplier:
+                    type: number
+                  rewardBonus:
+                    type: number
+            referralRewardRate:
+              type: number
+            refereeBonus:
+              type: number
+
+    ReferralStatsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            referralCode:
+              type: string
+            totalReferrals:
+              type: integer
+            activeReferrals:
+              type: integer
+            totalVolume:
+              type: string
+            totalRewards:
+              type: string
+            referrals:
+              type: array
+              items:
+                type: object
+                properties:
+                  refereeAddress:
+                    type: string
+                  signupDate:
+                    type: integer
+                    format: int64
+                  totalVolume:
+                    type: string
+                  isActive:
+                    type: boolean
+
+    ApplyReferralResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        referrer:
+          type: string
+          nullable: true
+        bonusRate:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
+    ReferralLeaderboardResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              rank:
+                type: integer
+              referrerAddress:
+                type: string
+              totalReferrals:
+                type: integer
+              totalVolume:
+                type: string
+              totalRewards:
+                type: string
+
+    StakingPoolsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              tokenSymbol:
+                type: string
+              enabled:
+                type: boolean
+              minStake:
+                type: number
+              lockPeriods:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    days:
+                      type: integer
+                    apy:
+                      type: number
+              userTierBonus:
+                type: number
+                nullable: true
+
+    UserStakingResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            positions:
+              type: array
+              items:
+                $ref: '#/components/schemas/StakingPosition'
+            totalStaked:
+              type: string
+            totalRewards:
+              type: string
+            summary:
+              type: object
+              additionalProperties:
+                type: object
+                properties:
+                  staked:
+                    type: string
+                  rewards:
+                    type: string
+                  count:
+                    type: integer
+
+    StakingPosition:
+      type: object
+      properties:
+        id:
+          type: integer
+        tokenSymbol:
+          type: string
+        amount:
+          type: string
+        apy:
+          type: number
+        lockPeriod:
+          type: integer
+        stakedAt:
+          type: integer
+          format: int64
+        unlocksAt:
+          type: integer
+          format: int64
+          nullable: true
+        isLocked:
+          type: boolean
+        accruedRewards:
+          type: string
+        canUnstake:
+          type: boolean
+        earlyUnstakePenalty:
+          type: object
+          nullable: true
+          properties:
+            principalPenalty:
+              type: string
+            rewardsPenalty:
+              type: string
+
+    StakeResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            positionId:
+              type: integer
+            tokenSymbol:
+              type: string
+            amount:
+              type: string
+            lockPeriod:
+              type: integer
+            apy:
+              type: number
+            unlocksAt:
+              type: integer
+              format: int64
+              nullable: true
+            estimatedRewards:
+              type: string
+
+    UnstakeResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            positionId:
+              type: integer
+            principal:
+              type: string
+            rewards:
+              type: string
+            penalty:
+              type: object
+              nullable: true
+              properties:
+                principalPenalty:
+                  type: string
+                rewardsPenalty:
+                  type: string
+            netAmount:
+              type: string
+            message:
+              type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          description: Error message
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: "Invalid Ethereum address format"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: "Bridge transaction not found"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: "Internal server error"
+
+  securitySchemes:
+    WalletSignature:
+      type: apiKey
+      in: header
+      name: X-Wallet-Signature
+      description: EIP-191 or EIP-712 wallet signature for authentication

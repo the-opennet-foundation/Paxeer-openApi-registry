@@ -1,0 +1,1119 @@
+openapi: 3.1.0
+info:
+  title: Apex Perpetual Engine API
+  description: |
+    REST API for the Apex Perpetual Engine - provides perpetual futures market data, 
+    user analytics, trading history, leaderboards, and TradingView integration.
+  version: 0.1.0
+  contact:
+    name: Apex Perpetual Engine
+servers:
+  - url: https://liquid-rpc.paxeer.app
+    description: Production server
+
+tags:
+  - name: Health
+    description: Service health endpoints
+  - name: Markets
+    description: Market listing and data
+  - name: Futures
+    description: Futures data and snapshots
+  - name: Klines
+    description: Candlestick/OHLCV data
+  - name: WebSocket Data
+    description: Latest data from WebSocket streams
+  - name: User Data
+    description: User positions, history, and statistics
+  - name: Market Analytics
+    description: Market analytics and rankings
+  - name: Leaderboard
+    description: Trading leaderboard
+  - name: TradingView
+    description: TradingView charting library integration
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Returns the health status of the service
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '500':
+          description: Service is unhealthy (database connection failed)
+
+  /markets:
+    get:
+      tags:
+        - Markets
+      summary: Get all active perpetual markets
+      description: Returns a list of all active perpetual markets with their symbols and addresses
+      operationId: getMarkets
+      responses:
+        '200':
+          description: List of active markets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MarketSummary'
+        '500':
+          description: Internal server error
+
+  /perp/futures/latest:
+    get:
+      tags:
+        - Futures
+      summary: Get latest futures snapshots
+      description: Returns the most recent futures snapshot for each symbol including prices, funding rates, and 24h stats
+      operationId: getLatestFutures
+      responses:
+        '200':
+          description: List of latest futures snapshots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LatestFuturesSnapshot'
+        '500':
+          description: Internal server error
+
+  /perp/klines:
+    get:
+      tags:
+        - Klines
+      summary: Get 1-minute kline/candlestick data
+      description: Returns OHLCV candlestick data for a specific symbol
+      operationId: getKlines1m
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          description: Trading pair symbol (e.g., PERP_BTC_USDC)
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of candles to return (1-1000, default 500)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 500
+        - name: start_ts_ms
+          in: query
+          required: false
+          description: Start timestamp in milliseconds
+          schema:
+            type: integer
+            format: int64
+        - name: end_ts_ms
+          in: query
+          required: false
+          description: End timestamp in milliseconds
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: List of kline candles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KlineCandle'
+        '500':
+          description: Internal server error
+
+  /perp/ws/markprices/latest:
+    get:
+      tags:
+        - WebSocket Data
+      summary: Get latest mark prices
+      description: Returns the most recent mark prices from WebSocket stream for all symbols
+      operationId: getLatestWsMarkPrices
+      responses:
+        '200':
+          description: List of latest mark prices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LatestWsMarkPrice'
+        '500':
+          description: Internal server error
+
+  /perp/ws/indexprices/latest:
+    get:
+      tags:
+        - WebSocket Data
+      summary: Get latest index prices
+      description: Returns the most recent index prices from WebSocket stream for all symbols
+      operationId: getLatestWsIndexPrices
+      responses:
+        '200':
+          description: List of latest index prices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LatestWsIndexPrice'
+        '500':
+          description: Internal server error
+
+  /perp/ws/tickers/latest:
+    get:
+      tags:
+        - WebSocket Data
+      summary: Get latest tickers
+      description: Returns the most recent ticker data from WebSocket stream for all symbols
+      operationId: getLatestWsTickers
+      responses:
+        '200':
+          description: List of latest tickers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LatestWsTicker'
+        '500':
+          description: Internal server error
+
+  /perp/user/{address}/positions:
+    get:
+      tags:
+        - User Data
+      summary: Get user open positions
+      description: Returns all currently open positions for a specific user address
+      operationId: getUserPositions
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: User wallet address
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of user positions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserPosition'
+        '500':
+          description: Internal server error
+
+  /perp/user/{address}/history:
+    get:
+      tags:
+        - User Data
+      summary: Get user trade history
+      description: Returns trade history for a specific user address with pagination
+      operationId: getUserTradeHistory
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: User wallet address
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of trades to return (1-500, default 50)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of trades to skip for pagination (default 0)
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: List of user trades
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserTradeHistory'
+        '500':
+          description: Internal server error
+
+  /perp/user/{address}/stats:
+    get:
+      tags:
+        - User Data
+      summary: Get user statistics
+      description: Returns aggregated trading statistics for a specific user address
+      operationId: getUserStats
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: User wallet address
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStats'
+        '500':
+          description: Internal server error
+
+  /perp/market/{address}/analytics:
+    get:
+      tags:
+        - Market Analytics
+      summary: Get market analytics
+      description: Returns detailed analytics for a specific perpetual market
+      operationId: getMarketAnalytics
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: Perpetual market contract address
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Market analytics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketAnalytics'
+        '404':
+          description: Market not found
+        '500':
+          description: Internal server error
+
+  /perp/markets/analytics:
+    get:
+      tags:
+        - Market Analytics
+      summary: Get all markets analytics
+      description: Returns analytics for all perpetual markets sorted by 24h volume
+      operationId: getAllMarketsAnalytics
+      responses:
+        '200':
+          description: List of market analytics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MarketAnalytics'
+        '500':
+          description: Internal server error
+
+  /perp/markets/top-gainers:
+    get:
+      tags:
+        - Market Analytics
+      summary: Get top gaining markets
+      description: Returns markets with the highest positive price change in the last 24 hours
+      operationId: getTopGainers
+      responses:
+        '200':
+          description: List of top gaining markets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MarketSummaryWithPrice'
+        '500':
+          description: Internal server error
+
+  /perp/markets/top-losers:
+    get:
+      tags:
+        - Market Analytics
+      summary: Get top losing markets
+      description: Returns markets with the highest negative price change in the last 24 hours
+      operationId: getTopLosers
+      responses:
+        '200':
+          description: List of top losing markets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MarketSummaryWithPrice'
+        '500':
+          description: Internal server error
+
+  /perp/markets/hottest:
+    get:
+      tags:
+        - Market Analytics
+      summary: Get hottest markets
+      description: Returns markets with the highest trading volume in the last 24 hours
+      operationId: getHottestMarkets
+      responses:
+        '200':
+          description: List of hottest markets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MarketSummaryWithPrice'
+        '500':
+          description: Internal server error
+
+  /perp/leaderboard:
+    get:
+      tags:
+        - Leaderboard
+      summary: Get trading leaderboard
+      description: Returns the top traders ranked by total PnL
+      operationId: getLeaderboard
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of entries to return (1-500, default 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        '200':
+          description: Leaderboard entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LeaderboardEntry'
+        '500':
+          description: Internal server error
+
+  /perp/tv/time:
+    get:
+      tags:
+        - TradingView
+      summary: TradingView time endpoint
+      description: Proxy endpoint for TradingView charting library - returns server time
+      operationId: tvTime
+      responses:
+        '200':
+          description: Server time as Unix timestamp
+          content:
+            text/plain:
+              schema:
+                type: string
+        '502':
+          description: Upstream error
+
+  /perp/tv/config:
+    get:
+      tags:
+        - TradingView
+      summary: TradingView configuration
+      description: Proxy endpoint for TradingView charting library - returns datafeed configuration
+      operationId: tvConfig
+      responses:
+        '200':
+          description: TradingView configuration
+          content:
+            application/json:
+              schema:
+                type: object
+        '502':
+          description: Upstream error
+
+  /perp/tv/symbols:
+    get:
+      tags:
+        - TradingView
+      summary: TradingView symbol info
+      description: Proxy endpoint for TradingView charting library - returns symbol information
+      operationId: tvSymbols
+      parameters:
+        - name: symbol
+          in: query
+          required: false
+          description: Symbol to get information for
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Symbol information
+          content:
+            application/json:
+              schema:
+                type: object
+        '502':
+          description: Upstream error
+
+  /perp/tv/symbol_info:
+    get:
+      tags:
+        - TradingView
+      summary: TradingView symbol info (batch)
+      description: Proxy endpoint for TradingView charting library - returns symbol information for multiple symbols
+      operationId: tvSymbolInfo
+      parameters:
+        - name: group
+          in: query
+          required: false
+          description: Symbol group
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Symbol information batch
+          content:
+            application/json:
+              schema:
+                type: object
+        '502':
+          description: Upstream error
+
+  /perp/tv/search:
+    get:
+      tags:
+        - TradingView
+      summary: TradingView symbol search
+      description: Proxy endpoint for TradingView charting library - search for symbols
+      operationId: tvSearch
+      parameters:
+        - name: query
+          in: query
+          required: false
+          description: Search query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Maximum results
+          schema:
+            type: integer
+        - name: type
+          in: query
+          required: false
+          description: Symbol type filter
+          schema:
+            type: string
+        - name: exchange
+          in: query
+          required: false
+          description: Exchange filter
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        '502':
+          description: Upstream error
+
+  /perp/tv/history:
+    get:
+      tags:
+        - TradingView
+      summary: TradingView historical data
+      description: Proxy endpoint for TradingView charting library - returns OHLCV historical data
+      operationId: tvHistory
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          description: Trading pair symbol
+          schema:
+            type: string
+        - name: resolution
+          in: query
+          required: true
+          description: Time resolution (e.g., 1, 5, 15, 60, D, W)
+          schema:
+            type: string
+        - name: from
+          in: query
+          required: false
+          description: Start timestamp (Unix seconds)
+          schema:
+            type: integer
+            format: int64
+        - name: to
+          in: query
+          required: false
+          description: End timestamp (Unix seconds)
+          schema:
+            type: integer
+            format: int64
+        - name: countback
+          in: query
+          required: false
+          description: Number of bars to return
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Historical OHLCV data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  s:
+                    type: string
+                    description: Status (ok, no_data, error)
+                  t:
+                    type: array
+                    items:
+                      type: integer
+                    description: Timestamps
+                  o:
+                    type: array
+                    items:
+                      type: number
+                    description: Open prices
+                  h:
+                    type: array
+                    items:
+                      type: number
+                    description: High prices
+                  l:
+                    type: array
+                    items:
+                      type: number
+                    description: Low prices
+                  c:
+                    type: array
+                    items:
+                      type: number
+                    description: Close prices
+                  v:
+                    type: array
+                    items:
+                      type: number
+                    description: Volume
+        '502':
+          description: Upstream error
+
+  /ws/perp:
+    get:
+      tags:
+        - WebSocket Data
+      summary: WebSocket endpoint for real-time data
+      description: |
+        WebSocket endpoint that fans out real-time market data including:
+        - markprices - Real-time mark prices
+        - indexprices - Real-time index prices
+        - tickers - Real-time 24h ticker data
+        - {symbol}@orderbookupdate - Orderbook updates per symbol
+      operationId: wsPerp
+      responses:
+        '101':
+          description: WebSocket upgrade successful
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        source:
+          type: string
+          example: Apex Perpetual Engine
+
+    MarketSummary:
+      type: object
+      properties:
+        symbol:
+          type: string
+          description: Trading pair symbol
+          example: PERP_BTC_USDC
+        perp_address:
+          type: string
+          description: Perpetual contract address
+          example: "0x1234567890abcdef1234567890abcdef12345678"
+        source:
+          type: string
+          example: Apex Perpetual Engine
+
+    LatestFuturesSnapshot:
+      type: object
+      properties:
+        symbol:
+          type: string
+          example: PERP_BTC_USDC
+        perp_address:
+          type: string
+          example: "0x1234567890abcdef1234567890abcdef12345678"
+        index_price:
+          type: number
+          format: double
+          description: Current index price
+          example: 42150.50
+        mark_price:
+          type: number
+          format: double
+          description: Current mark price
+          example: 42155.25
+        sum_unitary_funding:
+          type: number
+          format: double
+          description: Sum of unitary funding
+        est_funding_rate:
+          type: number
+          format: double
+          description: Estimated funding rate
+          example: 0.0001
+        last_funding_rate:
+          type: number
+          format: double
+          description: Last settled funding rate
+        next_funding_time:
+          type: integer
+          format: int64
+          description: Next funding timestamp in milliseconds
+        snapshot_ts_ms:
+          type: integer
+          format: int64
+          nullable: true
+          description: Snapshot timestamp from Orderly in milliseconds
+        source:
+          type: string
+          example: Apex Perpetual Engine
+
+    KlineCandle:
+      type: object
+      properties:
+        symbol:
+          type: string
+          example: PERP_BTC_USDC
+        interval:
+          type: string
+          example: 1m
+        open_time_ms:
+          type: integer
+          format: int64
+          description: Candle open time in milliseconds
+        close_time_ms:
+          type: integer
+          format: int64
+          description: Candle close time in milliseconds
+        open:
+          type: number
+          format: double
+          description: Open price
+        high:
+          type: number
+          format: double
+          description: High price
+        low:
+          type: number
+          format: double
+          description: Low price
+        close:
+          type: number
+          format: double
+          description: Close price
+        volume:
+          type: number
+          format: double
+          nullable: true
+          description: Trading volume
+        quote_volume:
+          type: number
+          format: double
+          nullable: true
+          description: Quote asset volume
+        trades:
+          type: integer
+          format: int64
+          nullable: true
+          description: Number of trades
+        source:
+          type: string
+          example: Apex Perpetual Engine
+
+    LatestWsMarkPrice:
+      type: object
+      properties:
+        symbol:
+          type: string
+          example: PERP_BTC_USDC
+        perp_address:
+          type: string
+          nullable: true
+          example: "0x1234567890abcdef1234567890abcdef12345678"
+        price:
+          type: number
+          format: double
+          description: Mark price
+        ws_ts_ms:
+          type: integer
+          format: int64
+          nullable: true
+          description: WebSocket timestamp in milliseconds
+        source:
+          type: string
+          example: Apex Perpetual Engine
+
+    LatestWsIndexPrice:
+      type: object
+      properties:
+        symbol:
+          type: string
+          example: PERP_BTC_USDC
+        price:
+          type: number
+          format: double
+          description: Index price
+        ws_ts_ms:
+          type: integer
+          format: int64
+          nullable: true
+          description: WebSocket timestamp in milliseconds
+        source:
+          type: string
+          example: Apex Perpetual Engine
+
+    LatestWsTicker:
+      type: object
+      properties:
+        symbol:
+          type: string
+          example: PERP_BTC_USDC
+        last_price:
+          type: number
+          format: double
+          nullable: true
+          description: Last traded price
+        open_24h:
+          type: number
+          format: double
+          nullable: true
+          description: 24h open price
+        high_24h:
+          type: number
+          format: double
+          nullable: true
+          description: 24h high price
+        low_24h:
+          type: number
+          format: double
+          nullable: true
+          description: 24h low price
+        volume_24h:
+          type: number
+          format: double
+          nullable: true
+          description: 24h trading volume
+        amount_24h:
+          type: number
+          format: double
+          nullable: true
+          description: 24h trading amount in quote currency
+        trades_24h:
+          type: integer
+          format: int64
+          nullable: true
+          description: Number of trades in last 24h
+        ws_ts_ms:
+          type: integer
+          format: int64
+          nullable: true
+          description: WebSocket timestamp in milliseconds
+        source:
+          type: string
+          example: Apex Perpetual Engine
+
+    UserPosition:
+      type: object
+      properties:
+        perp_address:
+          type: string
+          description: Perpetual contract address
+        perp_symbol:
+          type: string
+          nullable: true
+          description: Trading pair symbol
+        collateral_token:
+          type: string
+          description: Collateral token address
+        is_long:
+          type: boolean
+          description: True if long position, false if short
+        size:
+          type: string
+          description: Position size (string to preserve precision)
+        average_entry_price:
+          type: string
+          description: Average entry price
+        margin:
+          type: string
+          description: Margin amount
+        total_cost:
+          type: string
+          description: Total cost basis
+        current_price:
+          type: string
+          nullable: true
+          description: Current mark price
+        unrealized_pnl:
+          type: string
+          nullable: true
+          description: Unrealized profit/loss
+        unrealized_pnl_percentage:
+          type: string
+          nullable: true
+          description: Unrealized PnL as percentage
+        liquidation_price:
+          type: string
+          nullable: true
+          description: Estimated liquidation price
+        open_timestamp:
+          type: integer
+          format: int64
+          description: Position open timestamp
+
+    UserTradeHistory:
+      type: object
+      properties:
+        tx_hash:
+          type: string
+          description: Transaction hash
+        event_type:
+          type: string
+          description: Trade event type (e.g., PositionOpened, PositionClosed)
+        perp_address:
+          type: string
+          description: Perpetual contract address
+        perp_symbol:
+          type: string
+          nullable: true
+          description: Trading pair symbol
+        collateral_token:
+          type: string
+          description: Collateral token address
+        is_long:
+          type: boolean
+          description: True if long, false if short
+        size:
+          type: string
+          description: Trade size
+        price:
+          type: string
+          description: Execution price
+        pnl:
+          type: string
+          nullable: true
+          description: Realized PnL (for closing trades)
+        timestamp:
+          type: integer
+          format: int64
+          description: Trade timestamp
+        block_number:
+          type: integer
+          format: int64
+          description: Block number
+
+    UserStats:
+      type: object
+      properties:
+        user_address:
+          type: string
+          description: User wallet address
+        total_trades:
+          type: integer
+          format: int64
+          description: Total number of trades
+        total_volume_usd:
+          type: string
+          description: Total trading volume in USD
+        realized_pnl:
+          type: string
+          description: Total realized PnL
+        unrealized_pnl:
+          type: string
+          description: Total unrealized PnL
+        total_pnl:
+          type: string
+          description: Total PnL (realized + unrealized)
+        wins:
+          type: integer
+          format: int64
+          description: Number of winning trades
+        losses:
+          type: integer
+          format: int64
+          description: Number of losing trades
+        win_rate:
+          type: string
+          description: Win rate as percentage
+        open_positions_count:
+          type: integer
+          format: int32
+          description: Number of currently open positions
+        total_margin_locked:
+          type: string
+          description: Total margin locked in open positions
+        first_trade_timestamp:
+          type: integer
+          format: int64
+          nullable: true
+          description: First trade timestamp
+        last_trade_timestamp:
+          type: integer
+          format: int64
+          nullable: true
+          description: Most recent trade timestamp
+
+    MarketAnalytics:
+      type: object
+      properties:
+        perp_address:
+          type: string
+          description: Perpetual contract address
+        symbol:
+          type: string
+          nullable: true
+          description: Trading pair symbol
+        total_trades:
+          type: integer
+          format: int64
+          description: Total number of trades
+        total_volume_usd:
+          type: string
+          description: Total trading volume in USD
+        long_volume_usd:
+          type: string
+          description: Long side volume in USD
+        short_volume_usd:
+          type: string
+          description: Short side volume in USD
+        open_interest_long:
+          type: string
+          description: Open interest on long side
+        open_interest_short:
+          type: string
+          description: Open interest on short side
+        unique_traders:
+          type: integer
+          format: int64
+          description: Number of unique traders
+        active_positions:
+          type: integer
+          format: int32
+          description: Number of active positions
+        volume_24h:
+          type: string
+          description: 24h trading volume
+        trades_24h:
+          type: integer
+          format: int64
+          description: Number of trades in last 24h
+        price_change_24h_percentage:
+          type: string
+          nullable: true
+          description: 24h price change percentage
+        high_24h:
+          type: string
+          nullable: true
+          description: 24h high price
+        low_24h:
+          type: string
+          nullable: true
+          description: 24h low price
+        last_price:
+          type: string
+          nullable: true
+          description: Last traded price
+        last_trade_timestamp:
+          type: integer
+          format: int64
+          nullable: true
+          description: Last trade timestamp
+
+    MarketSummaryWithPrice:
+      type: object
+      properties:
+        perp_address:
+          type: string
+          description: Perpetual contract address
+        symbol:
+          type: string
+          nullable: true
+          description: Trading pair symbol
+        last_price:
+          type: string
+          nullable: true
+          description: Last traded price
+        price_change_24h_percentage:
+          type: string
+          nullable: true
+          description: 24h price change percentage
+        volume_24h:
+          type: string
+          description: 24h trading volume
+        trades_24h:
+          type: integer
+          format: int64
+          description: Number of trades in last 24h
+
+    LeaderboardEntry:
+      type: object
+      properties:
+        rank:
+          type: integer
+          format: int32
+          description: Leaderboard rank
+        user_address:
+          type: string
+          description: Trader wallet address
+        total_pnl:
+          type: string
+          description: Total profit/loss
+        total_volume_usd:
+          type: string
+          description: Total trading volume in USD
+        total_trades:
+          type: integer
+          format: int64
+          description: Total number of trades
+        win_rate:
+          type: string
+          nullable: true
+          description: Win rate as percentage
